@@ -23,13 +23,13 @@ expect the out-of-sample error to be higher than both of these values.
 To speed things up, we'll tell R to use multiple cores. Using the `doMC`
 library, we'll register four cores for parallel processing.
 
-```{r message=F}
+
+```r
 library(data.table)
 library(caret)
 
 library(doMC)
 registerDoMC(4)
-
 ```
 
 
@@ -38,7 +38,8 @@ registerDoMC(4)
 In this chapter, we're going to load the data from the internet and transform
 them to our needs.
 
-```{r cache=T}
+
+```r
 download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
               "pml-training.csv")
 download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
@@ -52,7 +53,8 @@ We can't use columns with missing data for our prediction models and we don't
 have enough information about the data to impute the missing values. Therefore
 we need to remove columns with missing data.
 
-```{r cache=T}
+
+```r
 training <- training[,colSums(is.na(training)) == 0, with=F]
 ```
 
@@ -61,14 +63,16 @@ assume that there will be a relation between the time stamps in our data and out
 of sample data. Also we are not interested in the user performing the exercise
 for the same reason. We can cut our data down by the first seven columns.
 
-```{r cache=T}
+
+```r
 training <- training[,-c(1:7)]
 ```
 
 The manner in which the exercise was done is saved in the `classe` column. We
 need to convert the values to factors to be able to predict them.
 
-```{r cache=T}
+
+```r
 training$classe <- factor(training$classe)
 ```
 
@@ -76,7 +80,8 @@ training$classe <- factor(training$classe)
 
 Let's have a look at whats left over from our original data.
 
-```{r cache=T,results="hide"}
+
+```r
 str(training) # Output redacted
 ```
 
@@ -85,8 +90,15 @@ observations! That's way too much for a pairs plot. Sad...
 
 How many observations do we have per outcome category?
 
-```{r cache=T}
+
+```r
 table(training$classe)
+```
+
+```
+## 
+##    A    B    C    D    E 
+## 5580 3797 3422 3216 3607
 ```
 
 Category A has by far the most observations. Let's hope, that this unfair
@@ -104,7 +116,8 @@ understand. It's possible to follow the path an observation takes by hand.
 In order to make things reproducible, we have to set a seed. We'll use a numeric
 representation of the date this report was written.
 
-```{r cache=T}
+
+```r
 set.seed(20190724)
 ```
 
@@ -115,9 +128,31 @@ The data won't be pre-processed and we won't use any cross validation. But we'll
 re-sample the data 25 times as that's the default option and we want to keep
 things simple.
 
-```{r cache=T}
+
+```r
 m1 <- train(classe ~ ., method="rpart", data=training)
 m1
+```
+
+```
+## CART 
+## 
+## 19622 samples
+##    52 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Bootstrapped (25 reps) 
+## Summary of sample sizes: 19622, 19622, 19622, 19622, 19622, 19622, ... 
+## Resampling results across tuning parameters:
+## 
+##   cp          Accuracy   Kappa     
+##   0.03567868  0.5103775  0.36287859
+##   0.05998671  0.4229443  0.21926291
+##   0.11515454  0.3234347  0.05936889
+## 
+## Accuracy was used to select the optimal model using the largest value.
+## The final value used for the model was cp = 0.03567868.
 ```
 
 Ouch! That's bad... Only 0.5 accuracy. Its about two and a halve times better
@@ -129,7 +164,8 @@ Get the big cannons! We'll use the `rf` method, which means, we'll generate
 many, many trees and combine them. Again we'll use the default options. This
 might take a while, I'll get me a coffee.
 
-```{r eval=FALSE}
+
+```r
 m2 <- train(classe ~ ., method="rf", data=training)
 ```
 
@@ -144,12 +180,45 @@ tree optimizes on the residuals of the predecessor. Again we'll use most of the
 default options with no data pre-processing, but ten-fold cross-validation. The
 ten-fold is a default if using the `cv` method in `train`.
 
-```{r cache=T,results="hide"}
+
+```r
 m3 <- train(classe ~ ., method="gbm", data=training,
             trControl=trainControl(method="cv"))
 ```
-```{r cache=T}
+
+```r
 m3
+```
+
+```
+## Stochastic Gradient Boosting 
+## 
+## 19622 samples
+##    52 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 17660, 17659, 17660, 17661, 17659, 17660, ... 
+## Resampling results across tuning parameters:
+## 
+##   interaction.depth  n.trees  Accuracy   Kappa    
+##   1                   50      0.7517588  0.6851596
+##   1                  100      0.8200984  0.7722712
+##   1                  150      0.8542955  0.8156133
+##   2                   50      0.8565882  0.8182834
+##   2                  100      0.9070415  0.8823786
+##   2                  150      0.9329311  0.9151250
+##   3                   50      0.8962893  0.8687112
+##   3                  100      0.9443474  0.9295806
+##   3                  150      0.9631526  0.9533819
+## 
+## Tuning parameter 'shrinkage' was held constant at a value of 0.1
+## 
+## Tuning parameter 'n.minobsinnode' was held constant at a value of 10
+## Accuracy was used to select the optimal model using the largest value.
+## The final values used for the model were n.trees = 150,
+##  interaction.depth = 3, shrinkage = 0.1 and n.minobsinnode = 10.
 ```
 
 Gotcha! That's way better. The best model, the one with an interaction depth
@@ -161,7 +230,8 @@ model, we'll use on the testing data set.
 We have to input the results from the prediction manually in the Coursera Quiz
 to validate them.
 
-```{r cache=T,results="hide"}
+
+```r
 predict(m3, newdata=testing) # Results hidden
 ```
 
